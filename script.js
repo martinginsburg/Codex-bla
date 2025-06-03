@@ -37,12 +37,16 @@ class UBoat {
     if (!this.underwater) {
       this.underwater = true;
       this.diveTimer = this.airTime;
+      effects.push(new Bubble(this.x, this.y));
     }
   }
 
   surface() {
     if (this.underwater) {
       this.underwater = false;
+      for (let i = 0; i < 5; i++) {
+        effects.push(new Bubble(this.x + (Math.random() - 0.5) * 20, this.y));
+      }
     }
   }
 
@@ -61,12 +65,14 @@ class UBoat {
     const dx = targetX - canvas.width / 2;
     const dy = targetY - canvas.height / 2;
     const len = Math.hypot(dx, dy);
+    effects.push(new Bubble(this.x, this.y));
     return new Torpedo(this.x, this.y, dx / len, dy / len);
   }
 
   fireDeckgun() {
     if (this.deckCooldown > 0 || this.underwater) return null;
     this.deckCooldown = 1;
+    effects.push(new Explosion(this.x + Math.cos(this.angle) * 20, this.y + Math.sin(this.angle) * 20));
     return new DeckShell(this.x, this.y, Math.cos(this.angle), Math.sin(this.angle));
   }
 
@@ -83,13 +89,14 @@ class UBoat {
     ctx.save();
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate(this.angle);
-    ctx.fillStyle = '#003399';
+    // hull
+    ctx.fillStyle = '#445b7c';
     ctx.beginPath();
-    ctx.moveTo(15, 0);
-    ctx.lineTo(-15, -10);
-    ctx.lineTo(-15, 10);
-    ctx.closePath();
+    ctx.ellipse(0, 0, 30, 10, 0, 0, Math.PI * 2);
     ctx.fill();
+    // conning tower
+    ctx.fillStyle = '#2e3d55';
+    ctx.fillRect(-5, -15, 10, 10);
     ctx.restore();
   }
 }
@@ -106,12 +113,17 @@ class Torpedo {
   update(delta) {
     this.x += this.dirX * this.speed;
     this.y += this.dirY * this.speed;
+    effects.push(new Bubble(this.x, this.y));
   }
   draw(ctx, camX, camY) {
     ctx.save();
     ctx.translate(this.x - camX + canvas.width / 2, this.y - camY + canvas.height / 2);
-    ctx.fillStyle = '#0ff';
-    ctx.fillRect(-2, -2, 4, 4);
+    const angle = Math.atan2(this.dirY, this.dirX);
+    ctx.rotate(angle);
+    ctx.fillStyle = '#c0c0c0';
+    ctx.fillRect(-6, -1.5, 12, 3);
+    ctx.fillStyle = '#666';
+    ctx.fillRect(6, -2, 2, 4);
     ctx.restore();
   }
 }
@@ -132,8 +144,10 @@ class DeckShell {
   draw(ctx, camX, camY) {
     ctx.save();
     ctx.translate(this.x - camX + canvas.width / 2, this.y - camY + canvas.height / 2);
-    ctx.fillStyle = '#ff0';
-    ctx.fillRect(-2, -2, 4, 4);
+    const angle = Math.atan2(this.dirY, this.dirX);
+    ctx.rotate(angle);
+    ctx.fillStyle = '#dcbc6c';
+    ctx.fillRect(-3, -1.5, 6, 3);
     ctx.restore();
   }
 }
@@ -154,13 +168,70 @@ class ZombieBoat {
     if (!uboat.underwater && len < 20) {
       uboat.takeDamage(10);
       this.dead = true;
+      effects.push(new Explosion(this.x, this.y));
     }
   }
   draw(ctx, camX, camY) {
     ctx.save();
     ctx.translate(this.x - camX + canvas.width / 2, this.y - camY + canvas.height / 2);
-    ctx.fillStyle = 'red';
-    ctx.fillRect(-10, -5, 20, 10);
+    ctx.fillStyle = '#8b2c2c';
+    ctx.beginPath();
+    ctx.moveTo(-20, 0);
+    ctx.lineTo(-15, -6);
+    ctx.lineTo(15, -6);
+    ctx.lineTo(20, 0);
+    ctx.lineTo(15, 6);
+    ctx.lineTo(-15, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#5a1e1e';
+    ctx.fillRect(-6, -8, 12, 4);
+    ctx.restore();
+  }
+}
+
+class Bubble {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.life = 0.5;
+    this.maxLife = 0.5;
+  }
+  update(delta) {
+    this.y -= 10 * delta;
+    this.life -= delta;
+  }
+  draw(ctx, camX, camY) {
+    if (this.life <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = this.life / this.maxLife;
+    ctx.fillStyle = '#a7d9ff';
+    ctx.beginPath();
+    ctx.arc(this.x - camX + canvas.width / 2, this.y - camY + canvas.height / 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+class Explosion {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.life = 0.6;
+    this.maxLife = 0.6;
+  }
+  update(delta) {
+    this.life -= delta;
+  }
+  draw(ctx, camX, camY) {
+    if (this.life <= 0) return;
+    const p = 1 - this.life / this.maxLife;
+    ctx.save();
+    ctx.globalAlpha = this.life / this.maxLife;
+    ctx.fillStyle = '#ff6a00';
+    ctx.beginPath();
+    ctx.arc(this.x - camX + canvas.width / 2, this.y - camY + canvas.height / 2, 20 * p, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 }
@@ -189,6 +260,7 @@ uboat.deckCooldown = 0;
 const torpedoes = [];
 const shells = [];
 let zombies = [];
+const effects = [];
 let wave = 1;
 let score = 0;
 let scrap = 0;
@@ -263,6 +335,7 @@ function update(delta) {
   torpedoes.forEach(t => t.update(delta));
   shells.forEach(s => s.update(delta));
   zombies.forEach(z => z.update(delta, uboat));
+  effects.forEach(e => e.update(delta));
 
   // Collision detection
   zombies.forEach(z => {
@@ -271,6 +344,7 @@ function update(delta) {
       if (dist < 15) {
         z.dead = true;
         t.dead = true;
+        effects.push(new Explosion(z.x, z.y));
         score += 100;
         scrap += 1;
       }
@@ -280,6 +354,7 @@ function update(delta) {
       if (dist < 15) {
         z.dead = true;
         s.dead = true;
+        effects.push(new Explosion(z.x, z.y));
         score += 50;
         scrap += 1;
       }
@@ -287,9 +362,9 @@ function update(delta) {
   });
 
   // Remove dead
-  for (let arr of [torpedoes, shells, zombies]) {
+  for (let arr of [torpedoes, shells, zombies, effects]) {
     for (let i = arr.length - 1; i >= 0; i--) {
-      if (arr[i].dead) arr.splice(i, 1);
+      if (arr[i].dead || arr[i].life <= 0) arr.splice(i, 1);
     }
   }
 
@@ -315,7 +390,10 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // background
-  ctx.fillStyle = '#00224c';
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, '#004a7f');
+  gradient.addColorStop(1, '#001a33');
+  ctx.fillStyle = gradient;
   ctx.fillRect(0,0,canvas.width, canvas.height);
 
   const camX = uboat.x;
@@ -324,6 +402,7 @@ function draw() {
   zombies.forEach(z => z.draw(ctx, camX, camY));
   torpedoes.forEach(t => t.draw(ctx, camX, camY));
   shells.forEach(s => s.draw(ctx, camX, camY));
+  effects.forEach(e => e.draw(ctx, camX, camY));
 
   uboat.draw(ctx);
 }
